@@ -2,19 +2,25 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Database } from "../lib/database.types";
-import { RiChat3Fill, RiSendPlaneFill } from "react-icons/ri";
+import { RiChat3Fill, RiSendPlaneFill, RiMusic2Fill } from "react-icons/ri";
+import { FaSpotify } from "react-icons/fa";
 import Avatar from "./Avatar";
+import SongSearchModal from "./SongSearchModal";
+import { SpotifyTrack } from "../spotify/api";
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
 
-export default function ChatPage({ session }: { session: Session }) {
+const SONG_PREFIX = "SONG_SHARE::";
+
+export default function ChatPage({ session, accessToken }: { session: Session; accessToken?: string }) {
   const [friends, setFriends] = useState<Profile[]>([]);
   const [selectedFriend, setSelectedFriend] = useState<Profile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
+  const [isSongModalOpen, setIsSongModalOpen] = useState(false);
 
   useEffect(() => {
     fetchFriends();
@@ -133,8 +139,49 @@ export default function ChatPage({ session }: { session: Session }) {
     }
   };
 
+  const handleSendSong = async (track: SpotifyTrack) => {
+    if (!selectedFriend) return;
+
+    const songData = {
+      id: track.id,
+      name: track.name,
+      artist: track.artists[0].name,
+      image: track.album.images[0]?.url,
+      uri: `https://open.spotify.com/track/${track.id}`
+    };
+
+    const msgContent = `${SONG_PREFIX}${JSON.stringify(songData)}`;
+    
+    try {
+      const { data, error } = await (supabase
+        .from('messages') as any)
+        .insert({
+          sender_id: session.user.id,
+          receiver_id: selectedFriend.id,
+          content: msgContent,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setMessages((prev) => [...prev, data]);
+      }
+    } catch (error) {
+      console.error("Error sending song:", error);
+      alert("Failed to send song");
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-100px)] flex gap-4">
+      <SongSearchModal 
+        isOpen={isSongModalOpen} 
+        onClose={() => setIsSongModalOpen(false)} 
+        onSelect={handleSendSong}
+        accessToken={accessToken}
+      />
+
       {/* Sidebar: Friends List */}
       <div className="w-1/3 bg-zinc-900/50 rounded-xl p-4 flex flex-col">
         <div className="flex items-center gap-2 mb-4">
@@ -183,6 +230,14 @@ export default function ChatPage({ session }: { session: Session }) {
               {messages.map((msg) => {
                 const isMe = msg.sender_id === session.user.id;
                 
+                const isSong = msg.content.startsWith(SONG_PREFIX);
+                let songData = null;
+                if (isSong) {
+                    try {
+                        songData = JSON.parse(msg.content.substring(SONG_PREFIX.length));
+                    } catch (e) {}
+                }
+
                 return (
                   <div key={msg.id} className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                     {!isMe && (
@@ -190,12 +245,42 @@ export default function ChatPage({ session }: { session: Session }) {
                          <Avatar url={selectedFriend.avatar_url} size="xs" />
                       </div>
                     )}
-                    <div className={`max-w-[70%] px-4 py-2 rounded-2xl break-words ${isMe ? 'bg-spotify-green text-black rounded-br-none' : 'bg-zinc-800 text-white rounded-bl-none'}`}>
-                      <p>{msg.content}</p>
-                      <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-black/60' : 'text-zinc-400'}`}>
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
+                    
+                    {songData ? (
+                        // Song Card
+                        <div className={`max-w-[300px] w-full p-3 rounded-2xl ${isMe ? 'bg-spotify-green text-black rounded-br-none' : 'bg-zinc-800 text-white rounded-bl-none'}`}>
+                            <div className="flex gap-3 items-center mb-2">
+                                <img src={songData.image} alt={songData.name} className="w-16 h-16 rounded shadow-lg object-cover" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold truncate text-sm">{songData.name}</p>
+                                    <p className={`text-xs truncate ${isMe ? 'text-black/70' : 'text-zinc-400'}`}>{songData.artist}</p>
+                                </div>
+                            </div>
+                            <a 
+                                href={songData.uri} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className={`flex items-center justify-center gap-2 w-full py-2 rounded-full text-xs font-bold transition-colors ${
+                                    isMe 
+                                    ? 'bg-black/10 hover:bg-black/20 text-black' 
+                                    : 'bg-zinc-700 hover:bg-zinc-600 text-white'
+                                }`}
+                            >
+                                <FaSpotify /> Play on Spotify
+                            </a>
+                             <p className={`text-[10px] mt-2 text-right ${isMe ? 'text-black/60' : 'text-zinc-400'}`}>
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                             </p>
+                        </div>
+                    ) : (
+                        // Text Message
+                        <div className={`max-w-[70%] px-4 py-2 rounded-2xl break-words ${isMe ? 'bg-spotify-green text-black rounded-br-none' : 'bg-zinc-800 text-white rounded-bl-none'}`}>
+                        <p>{msg.content}</p>
+                        <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-black/60' : 'text-zinc-400'}`}>
+                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        </div>
+                    )}
                   </div>
                 );
               })}
@@ -205,6 +290,14 @@ export default function ChatPage({ session }: { session: Session }) {
             {/* Input */}
             <form onSubmit={sendMessage} className="p-4 border-t border-zinc-800 bg-zinc-900">
               <div className="flex gap-2">
+                <button
+                    type="button"
+                    onClick={() => setIsSongModalOpen(true)}
+                    className="w-10 h-10 bg-zinc-800 text-zinc-400 hover:text-spotify-green rounded-full flex items-center justify-center transition-colors"
+                    title="Share Song"
+                >
+                    <RiMusic2Fill size={20} />
+                </button>
                 <input
                   type="text"
                   value={newMessage}

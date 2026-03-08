@@ -746,7 +746,7 @@ export default function MainPage({ session, spotifyToken }: MainPageProps) {
           ) : currentPage === "friends" ? (
             <FriendsPage session={session} />
           ) : (
-            <ChatPage session={session} />
+            <ChatPage session={session} accessToken={accessToken || undefined} />
           )}
         </div>
       </main>

@@ -123,6 +123,10 @@ export async function getUserPlaylists(accessToken: string, limit: number = 20):
   return fetchSpotifyApi(accessToken, "/me/playlists", { limit: limit.toString() });
 }
 
+export async function searchTracks(accessToken: string, query: string, limit: number = 10): Promise<{ tracks: { items: SpotifyTrack[] } }> {
+  return fetchSpotifyApi(accessToken, "/search", { q: query, type: "track", limit: limit.toString() });
+}
+
 export function formatDuration(ms: number): string {
   const minutes = Math.floor(ms / 60000);
   const seconds = Math.floor((ms % 60000) / 1000);

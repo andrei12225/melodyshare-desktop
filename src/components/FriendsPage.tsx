@@ -4,6 +4,7 @@ import { Session } from "@supabase/supabase-js";
 import { Database } from "../lib/database.types";
 import { RiUserAddFill, RiUserReceivedFill, RiCheckFill, RiCloseFill, RiSearchLine, RiUser3Fill, RiUserUnfollowFill } from "react-icons/ri";
 import ConfirmationModal from "./ConfirmationModal";
+import Avatar from "./Avatar";
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -23,44 +24,79 @@ export default function FriendsPage({ session }: { session: Session }) {
   };
 
   useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (searchTerm.trim()) {
+        performSearch();
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
+  const performSearch = async () => {
+    setSearchLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('username', `%${searchTerm}%`)
+        .neq('id', session.user.id)
+        .limit(10);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error("Error searching users:", error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchFriendsAndRequests();
 
     // Subscribe to realtime changes for friendships
     const channel = supabase
-      .channel('friendships_changes')
+      .channel('friendships_page_updates')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'friendships',
-          filter: `friend_id=eq.${session.user.id}`,
+          // Removing specific filter to ensure we catch all events, then filtering client-side
         },
-        () => {
-          fetchFriendsAndRequests();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'friendships',
-          filter: `user_id=eq.${session.user.id}`,
-        },
-        () => {
-          fetchFriendsAndRequests();
+        (payload) => {
+           const newRecord = payload.new as any;
+           const oldRecord = payload.old as any;
+           const myId = session.user.id;
+
+           // Check if the change involves the current user
+           const involvesMe = 
+             (newRecord && (newRecord.user_id === myId || newRecord.friend_id === myId)) ||
+             (oldRecord && (oldRecord.user_id === myId || oldRecord.friend_id === myId));
+
+           if (involvesMe) {
+             fetchFriendsAndRequests();
+           }
         }
       )
       .subscribe();
 
+    // Polling fallback (every 5 seconds) to ensure UI stays in sync if realtime fails
+    // Pass true for background fetch to avoid loading spinner
+    const interval = setInterval(() => fetchFriendsAndRequests(true), 5000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [session.user.id]);
 
-  const fetchFriendsAndRequests = async () => {
-    setLoading(true);
+  const fetchFriendsAndRequests = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       // Fetch friends (accepted friendships where user is sender or receiver)
       const { data: acceptedData, error: acceptedError } = await supabase
@@ -100,30 +136,13 @@ export default function FriendsPage({ session }: { session: Session }) {
     } catch (error) {
       console.error("Error fetching friends:", error);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchTerm.trim()) return;
-
-    setSearchLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('username', `%${searchTerm}%`)
-        .neq('id', session.user.id)
-        .limit(10);
-
-      if (error) throw error;
-      setSearchResults(data || []);
-    } catch (error) {
-      console.error("Error searching users:", error);
-    } finally {
-      setSearchLoading(false);
-    }
+    // Search is now handled by useEffect on searchTerm change
   };
 
   const sendFriendRequest = async (userId: string) => {
@@ -133,7 +152,7 @@ export default function FriendsPage({ session }: { session: Session }) {
         .from('friendships' as any)
         .select('*')
         .or(`and(user_id.eq.${session.user.id},friend_id.eq.${userId}),and(user_id.eq.${userId},friend_id.eq.${session.user.id})`)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         showAlert("Request Exists", "Friendship or request already exists!", "info");
@@ -258,13 +277,7 @@ export default function FriendsPage({ session }: { session: Session }) {
             {incomingRequests.map((request) => (
               <div key={request.id} className="flex items-center justify-between bg-zinc-800/50 p-4 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center">
-                    {request.sender.avatar_url ? (
-                      <img src={request.sender.avatar_url} alt={request.sender.username || "User"} className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      <RiUser3Fill className="text-zinc-400" />
-                    )}
-                  </div>
+                  <Avatar url={request.sender.avatar_url} alt={request.sender.username || "User"} size="md" />
                   <div>
                     <p className="text-white font-medium">{request.sender.full_name || request.sender.username}</p>
                     <p className="text-zinc-500 text-xs">@{request.sender.username}</p>
@@ -308,13 +321,7 @@ export default function FriendsPage({ session }: { session: Session }) {
               {friends.map((friend) => (
                 <div key={friend.id} className="flex items-center justify-between bg-zinc-800/30 p-3 rounded-lg hover:bg-zinc-800/50 transition-colors group">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center">
-                      {friend.avatar_url ? (
-                        <img src={friend.avatar_url} alt={friend.username || "User"} className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <RiUser3Fill className="text-zinc-400" />
-                      )}
-                    </div>
+                    <Avatar url={friend.avatar_url} alt={friend.username || "User"} size="md" />
                     <div>
                       <p className="text-white font-medium">{friend.full_name || friend.username}</p>
                       <p className="text-zinc-500 text-xs">@{friend.username}</p>
@@ -350,26 +357,14 @@ export default function FriendsPage({ session }: { session: Session }) {
               />
               <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
             </div>
-            <button 
-              type="submit"
-              disabled={searchLoading || !searchTerm.trim()}
-              className="mt-2 w-full bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {searchLoading ? "Searching..." : "Search"}
-            </button>
+            {/* Removed Search button as it's now live search */}
           </form>
 
           <div className="space-y-3">
             {searchResults.map((user) => (
               <div key={user.id} className="flex items-center justify-between bg-zinc-800/30 p-3 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center">
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt={user.username || "User"} className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      <RiUser3Fill className="text-zinc-400 text-sm" />
-                    )}
-                  </div>
+                  <Avatar url={user.avatar_url} alt={user.username || "User"} size="sm" />
                   <p className="text-white text-sm font-medium">{user.username}</p>
                 </div>
                 <button

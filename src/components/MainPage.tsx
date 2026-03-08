@@ -3,10 +3,11 @@ import { supabase } from "../supabase/client.ts";
 import { Session } from "@supabase/supabase-js";
 import LoginButton from "./LoginButton.tsx";
 import { RiHomeFill, RiBarChartFill, RiHeartFill, RiLogoutBoxFill, RiMusic2Fill, RiCompassDiscoverFill, RiLoader4Line, RiTimeLine, RiUser3Fill, RiChat3Fill } from "react-icons/ri";
-import { FaSpotify } from "react-icons/fa";
 import { getSpotifyProfile, getTopTracks, getTopArtists, getLikedSongs, getRecentlyPlayed, getUserPlaylists, formatDuration, getTimeRangeLabel, SpotifyProfile, SpotifyTrack, SpotifyArtist } from "../spotify/api.ts";
 import FriendsPage from "./FriendsPage.tsx";
 import ChatPage from "./ChatPage.tsx";
+import ToastContainer, { ToastMessage, ToastType } from "./ToastContainer.tsx";
+import Avatar from "./Avatar.tsx";
 
 type Page = "home" | "stats" | "friends" | "chat";
 
@@ -14,9 +15,10 @@ interface SidebarProps {
   session: Session | null;
   currentPage: Page;
   onPageChange: (page: Page) => void;
+  pendingRequestsCount: number;
 }
 
-function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
+function Sidebar({ session, currentPage, onPageChange, pendingRequestsCount }: SidebarProps) {
   const [userProfile, setUserProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
 
   useEffect(() => {
@@ -26,28 +28,45 @@ function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
         .select('full_name, username, avatar_url')
         .eq('id', session.user.id)
         .single()
-        .then(({ data, error }) => {
+        .then(async ({ data, error }) => {
           if (error) {
             console.error("Error fetching profile:", error);
           }
-          if (data) {
-            setUserProfile(data);
+          
+          const metadata = session.user.user_metadata;
+          const spotifyAvatar = metadata.avatar_url || metadata.picture; // Handle different metadata keys
+          const spotifyName = metadata.full_name || metadata.name;
+
+          // Using any to bypass strict type check for now on partial update
+          const profileData = data as any;
+          if (profileData) {
+            // Check if we need to sync/update profile from Spotify data
+            const updates: any = {};
+            if ((!profileData.avatar_url && spotifyAvatar)) updates.avatar_url = spotifyAvatar;
+            if ((!profileData.full_name && spotifyName)) updates.full_name = spotifyName;
+
+            if (Object.keys(updates).length > 0) {
+               await (supabase.from('profiles') as any).update(updates).eq('id', session.user.id);
+               // Update local state immediately
+               setUserProfile({ ...profileData, ...updates });
+            } else {
+               setUserProfile(profileData);
+            }
           } else if (session.user) {
             // Fallback for existing users without a profile row
             const fallbackProfile = {
-              full_name: session.user.user_metadata.full_name || session.user.email,
-              username: session.user.user_metadata.name || session.user.email?.split('@')[0],
-              avatar_url: session.user.user_metadata.avatar_url
+              full_name: spotifyName || session.user.email,
+              username: metadata.user_name || session.user.email?.split('@')[0], // Spotify often provides user_name
+              avatar_url: spotifyAvatar
             };
             setUserProfile(fallbackProfile);
             
-            // Optionally try to create the missing profile row
-            const { full_name, username, avatar_url } = fallbackProfile;
+            // Create the missing profile row
             supabase.from('profiles').insert({
               id: session.user.id,
-              full_name,
-              username,
-              avatar_url
+              full_name: fallbackProfile.full_name,
+              username: fallbackProfile.username,
+              avatar_url: fallbackProfile.avatar_url
             } as any).then(({ error: insertError }) => {
               if (insertError) console.error("Failed to create missing profile:", insertError);
             });
@@ -60,7 +79,7 @@ function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
     <aside className="w-64 bg-black h-screen flex flex-col p-6 fixed left-0 top-0">
       <div className="mb-8">
         <div className="flex items-center gap-3 text-white mb-8">
-          <FaSpotify className="text-4xl text-spotify-green" />
+          <RiMusic2Fill className="text-4xl text-spotify-green" />
           <span className="text-2xl font-bold tracking-tight">MelodyShare</span>
         </div>
       </div>
@@ -85,6 +104,7 @@ function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
           active={currentPage === "friends"} 
           onClick={() => onPageChange("friends")}
           disabled={!session}
+          badge={pendingRequestsCount > 0 ? pendingRequestsCount : undefined}
         />
         <SidebarLink 
           icon={<RiChat3Fill />} 
@@ -98,13 +118,7 @@ function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
       <div className="mt-auto pt-6 border-t border-zinc-800">
         {session && userProfile ? (
           <div className="mb-4 p-3 bg-zinc-900/50 rounded-lg flex items-center gap-3 group relative cursor-help">
-            <div className="w-10 h-10 bg-zinc-800 rounded-full overflow-hidden flex-shrink-0">
-              {userProfile.avatar_url ? (
-                <img src={userProfile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <RiUser3Fill className="w-full h-full p-2 text-zinc-400" />
-              )}
-            </div>
+            <Avatar url={userProfile.avatar_url} alt="Profile" size="md" />
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-medium truncate">{userProfile.full_name || "User"}</p>
               <p className="text-zinc-500 text-xs truncate">@{userProfile.username || "username"}</p>
@@ -119,7 +133,7 @@ function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
           </div>
         ) : null}
         
-        {session ? (
+        {session && (
           <button
             onClick={() => supabase.auth.signOut()}
             className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors py-2 w-full"
@@ -127,16 +141,14 @@ function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
             <RiLogoutBoxFill className="text-xl" />
             <span>Sign Out</span>
           </button>
-        ) : (
-          <LoginButton />
         )}
       </div>
     </aside>
   );
 }
 
-function SidebarLink({ icon, text, active = false, disabled = false, onClick }: { icon: ReactNode; text: string; active?: boolean; disabled?: boolean; onClick?: () => void }) {
-  const baseClasses = "flex items-center gap-4 px-4 py-3 rounded-md transition-all duration-200";
+function SidebarLink({ icon, text, active = false, disabled = false, badge, onClick }: { icon: ReactNode; text: string; active?: boolean; disabled?: boolean; badge?: number; onClick?: () => void }) {
+  const baseClasses = "flex items-center gap-4 px-4 py-3 rounded-md transition-all duration-200 relative";
   const activeClasses = "bg-zinc-900 text-white";
   const inactiveClasses = "text-zinc-400 hover:text-white hover:bg-zinc-900";
   const disabledClasses = "opacity-50 cursor-not-allowed";
@@ -148,6 +160,11 @@ function SidebarLink({ icon, text, active = false, disabled = false, onClick }: 
     >
       {icon}
       <span className="font-medium">{text}</span>
+      {badge ? (
+        <span className="absolute right-4 bg-spotify-green text-black text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+          {badge}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -158,7 +175,7 @@ function HeroSection() {
       <div className="absolute inset-0 bg-[url('/wave.svg')] opacity-5 bg-cover bg-center" />
       <div className="relative z-10 flex flex-col items-center justify-center py-16 text-center">
         <div className="mb-6">
-          <FaSpotify className="text-7xl text-spotify-green animate-pulse" />
+          <RiMusic2Fill className="text-7xl text-spotify-green animate-pulse" />
         </div>
         <h1 className="text-4xl font-bold text-white mb-3">MelodyShare</h1>
         <p className="text-xl text-zinc-300 mb-8">Your personal Spotify listening stats</p>
@@ -309,13 +326,7 @@ function HomeDashboard({ accessToken }: { accessToken: string }) {
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
-        {profileImage ? (
-          <img src={profileImage} alt={profile?.display_name} className="w-16 h-16 rounded-full" />
-        ) : (
-          <div className="w-16 h-16 bg-spotify-green rounded-full flex items-center justify-center">
-            <RiMusic2Fill className="text-3xl text-black" />
-          </div>
-        )}
+        <Avatar url={profileImage} alt={profile?.display_name || "User"} size="xl" />
         <div>
           <p className="text-zinc-400 text-sm">Welcome back</p>
           <h1 className="text-3xl font-bold text-white">{profile?.display_name || "Spotify User"}</h1>
@@ -600,11 +611,121 @@ interface MainPageProps {
 
 export default function MainPage({ session, spotifyToken }: MainPageProps) {
   const [currentPage, setCurrentPage] = useState<Page>("home");
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const accessToken = session?.provider_token || spotifyToken;
+
+  const addToast = (title: string, message: string, type: ToastType = "info") => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts((prev) => [...prev, { id, title, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const fetchPendingRequests = async (isPolling = false) => {
+    if (!session?.user?.id) return;
+    try {
+      const { count, error } = await supabase
+        .from('friendships')
+        .select('id', { count: 'exact', head: true })
+        .eq('friend_id', session.user.id)
+        .eq('status', 'pending');
+      
+      if (!error && count !== null) {
+        setPendingRequestsCount(prev => {
+          if (isPolling && count > prev) {
+             addToast("New Request", "You have a new friend request!", "info");
+             const audio = new Audio('/notification.mp3');
+             audio.play().catch(() => {});
+          }
+          return count;
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching requests count:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    fetchPendingRequests();
+
+    // Subscribe to realtime changes for friend requests
+    const channel = supabase
+      .channel('global_friendships')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to ALL events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'friendships',
+        },
+        async (payload) => {
+          const newRecord = payload.new as any;
+          const oldRecord = payload.old as any;
+          const myId = session.user.id;
+          
+          // Check if I am involved as the receiver (friend_id)
+          // We care if:
+          // 1. New request sent TO me (INSERT)
+          // 2. Request TO me was Accepted/Rejected (UPDATE/DELETE)
+          
+          const involvedAsReceiver = 
+            (newRecord && newRecord.friend_id === myId) || 
+            (oldRecord && oldRecord.friend_id === myId);
+
+          if (involvedAsReceiver) {
+             // Handle Toast for New Requests
+             if (payload.eventType === 'INSERT' && newRecord.status === 'pending') {
+                 try {
+                   const { data: sender } = await supabase
+                     .from('profiles')
+                     .select('username')
+                     .eq('id', newRecord.user_id)
+                     .single();
+
+                   const senderName = (sender as any)?.username || "Someone";
+                   addToast("New Friend Request", `${senderName} sent you a friend request!`, "success");
+                   
+                   const audio = new Audio('/notification.mp3');
+                   audio.play().catch(() => {});
+                 } catch (err) {
+                   console.error("Error handling notification:", err);
+                 }
+             }
+             
+             // Always refresh count for any relevant change
+             fetchPendingRequests();
+          }
+        }
+      )
+      .subscribe();
+
+    // Polling fallback (every 10 seconds for robustness)
+    const interval = setInterval(() => fetchPendingRequests(true), 10000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [session?.user?.id]);
 
   return (
     <div className="min-h-screen bg-black">
-      <Sidebar session={session} currentPage={currentPage} onPageChange={setCurrentPage} />
+      <Sidebar 
+        session={session} 
+        currentPage={currentPage} 
+        onPageChange={setCurrentPage} 
+        pendingRequestsCount={pendingRequestsCount}
+      />
+      
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       <main className="ml-64 p-8 min-h-screen">
         <div className="max-w-5xl mx-auto">

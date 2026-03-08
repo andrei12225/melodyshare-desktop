@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Database } from "../lib/database.types";
-import { RiChat3Fill, RiSendPlaneFill, RiUser3Fill } from "react-icons/ri";
+import { RiChat3Fill, RiSendPlaneFill } from "react-icons/ri";
+import Avatar from "./Avatar";
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
@@ -153,15 +154,11 @@ export default function ChatPage({ session }: { session: Session }) {
                 onClick={() => setSelectedFriend(friend)}
                 className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${selectedFriend?.id === friend.id ? 'bg-zinc-800' : 'hover:bg-zinc-800/50'}`}
               >
-                <div className="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center relative">
-                  {friend.avatar_url ? (
-                    <img src={friend.avatar_url} alt={friend.username || "User"} className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    <RiUser3Fill className="text-zinc-400" />
-                  )}
+                <div className="relative">
+                  <Avatar url={friend.avatar_url} alt={friend.username || "User"} size="md" />
                   {/* Online status indicator could go here */}
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-white font-medium truncate">{friend.full_name || friend.username}</p>
                   <p className="text-zinc-500 text-xs truncate">@{friend.username}</p>
                 </div>
@@ -177,25 +174,25 @@ export default function ChatPage({ session }: { session: Session }) {
           <>
             {/* Header */}
             <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
-              <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center">
-                {selectedFriend.avatar_url ? (
-                  <img src={selectedFriend.avatar_url} alt={selectedFriend.username || "User"} className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  <RiUser3Fill className="text-zinc-400 text-sm" />
-                )}
-              </div>
+              <Avatar url={selectedFriend.avatar_url} alt={selectedFriend.username || "User"} size="sm" />
               <h2 className="text-white font-bold">{selectedFriend.full_name || selectedFriend.username}</h2>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
               {messages.map((msg) => {
                 const isMe = msg.sender_id === session.user.id;
+                
                 return (
-                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] px-4 py-2 rounded-2xl ${isMe ? 'bg-spotify-green text-black' : 'bg-zinc-800 text-white'}`}>
+                  <div key={msg.id} className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    {!isMe && (
+                      <div className="flex-shrink-0 mt-auto">
+                         <Avatar url={selectedFriend.avatar_url} size="xs" />
+                      </div>
+                    )}
+                    <div className={`max-w-[70%] px-4 py-2 rounded-2xl break-words ${isMe ? 'bg-spotify-green text-black rounded-br-none' : 'bg-zinc-800 text-white rounded-bl-none'}`}>
                       <p>{msg.content}</p>
-                      <p className={`text-[10px] mt-1 ${isMe ? 'text-black/60' : 'text-zinc-400'}`}>
+                      <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-black/60' : 'text-zinc-400'}`}>
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>

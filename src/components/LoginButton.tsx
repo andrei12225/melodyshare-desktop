@@ -6,8 +6,11 @@ export default function LoginButton() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'spotify',
       options: {
-        scopes: 'user-read-email user-library-read playlist-read-private',
+        scopes: 'user-read-email user-library-read playlist-read-private user-top-read user-read-recently-played',
         redirectTo: window.location.origin,
+        queryParams: {
+          prompt: 'consent'
+        }
       },
     });
 

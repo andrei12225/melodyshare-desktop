@@ -2,11 +2,13 @@ import { ReactNode, useEffect, useState } from "react";
 import { supabase } from "../supabase/client.ts";
 import { Session } from "@supabase/supabase-js";
 import LoginButton from "./LoginButton.tsx";
-import { RiHomeFill, RiBarChartFill, RiHeartFill, RiLogoutBoxFill, RiMusic2Fill, RiCompassDiscoverFill, RiLoader4Line, RiTimeLine } from "react-icons/ri";
+import { RiHomeFill, RiBarChartFill, RiHeartFill, RiLogoutBoxFill, RiMusic2Fill, RiCompassDiscoverFill, RiLoader4Line, RiTimeLine, RiUser3Fill, RiChat3Fill } from "react-icons/ri";
 import { FaSpotify } from "react-icons/fa";
 import { getSpotifyProfile, getTopTracks, getTopArtists, getLikedSongs, getRecentlyPlayed, getUserPlaylists, formatDuration, getTimeRangeLabel, SpotifyProfile, SpotifyTrack, SpotifyArtist } from "../spotify/api.ts";
+import FriendsPage from "./FriendsPage.tsx";
+import ChatPage from "./ChatPage.tsx";
 
-type Page = "home" | "stats";
+type Page = "home" | "stats" | "friends" | "chat";
 
 interface SidebarProps {
   session: Session | null;
@@ -15,6 +17,45 @@ interface SidebarProps {
 }
 
 function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
+  const [userProfile, setUserProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      supabase
+        .from('profiles')
+        .select('full_name, username, avatar_url')
+        .eq('id', session.user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Error fetching profile:", error);
+          }
+          if (data) {
+            setUserProfile(data);
+          } else if (session.user) {
+            // Fallback for existing users without a profile row
+            const fallbackProfile = {
+              full_name: session.user.user_metadata.full_name || session.user.email,
+              username: session.user.user_metadata.name || session.user.email?.split('@')[0],
+              avatar_url: session.user.user_metadata.avatar_url
+            };
+            setUserProfile(fallbackProfile);
+            
+            // Optionally try to create the missing profile row
+            const { full_name, username, avatar_url } = fallbackProfile;
+            supabase.from('profiles').insert({
+              id: session.user.id,
+              full_name,
+              username,
+              avatar_url
+            } as any).then(({ error: insertError }) => {
+              if (insertError) console.error("Failed to create missing profile:", insertError);
+            });
+          }
+        });
+    }
+  }, [session]);
+
   return (
     <aside className="w-64 bg-black h-screen flex flex-col p-6 fixed left-0 top-0">
       <div className="mb-8">
@@ -38,11 +79,46 @@ function Sidebar({ session, currentPage, onPageChange }: SidebarProps) {
           onClick={() => onPageChange("stats")}
           disabled={!session}
         />
-        <SidebarLink icon={<RiHeartFill />} text="Liked Songs" disabled />
-        <SidebarLink icon={<RiCompassDiscoverFill />} text="Discover" disabled />
+        <SidebarLink 
+          icon={<RiUser3Fill />} 
+          text="Friends" 
+          active={currentPage === "friends"} 
+          onClick={() => onPageChange("friends")}
+          disabled={!session}
+        />
+        <SidebarLink 
+          icon={<RiChat3Fill />} 
+          text="Chat" 
+          active={currentPage === "chat"} 
+          onClick={() => onPageChange("chat")}
+          disabled={!session}
+        />
       </nav>
 
       <div className="mt-auto pt-6 border-t border-zinc-800">
+        {session && userProfile ? (
+          <div className="mb-4 p-3 bg-zinc-900/50 rounded-lg flex items-center gap-3 group relative cursor-help">
+            <div className="w-10 h-10 bg-zinc-800 rounded-full overflow-hidden flex-shrink-0">
+              {userProfile.avatar_url ? (
+                <img src={userProfile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <RiUser3Fill className="w-full h-full p-2 text-zinc-400" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-medium truncate">{userProfile.full_name || "User"}</p>
+              <p className="text-zinc-500 text-xs truncate">@{userProfile.username || "username"}</p>
+            </div>
+            
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-0 w-full mb-2 p-3 bg-zinc-800 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-zinc-700">
+              <p className="text-xs text-zinc-400 mb-1">Signed in as</p>
+              <p className="text-white text-sm font-bold truncate">{session.user.email}</p>
+              <p className="text-xs text-zinc-500 mt-2">ID: {session.user.id.slice(0, 8)}...</p>
+            </div>
+          </div>
+        ) : null}
+        
         {session ? (
           <button
             onClick={() => supabase.auth.signOut()}
@@ -544,8 +620,12 @@ export default function MainPage({ session, spotifyToken }: MainPageProps) {
             </div>
           ) : currentPage === "home" ? (
             <HomeDashboard accessToken={accessToken} />
-          ) : (
+          ) : currentPage === "stats" ? (
             <StatsDashboard accessToken={accessToken} />
+          ) : currentPage === "friends" ? (
+            <FriendsPage session={session} />
+          ) : (
+            <ChatPage session={session} />
           )}
         </div>
       </main>

@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { supabase } from "../supabase/client.ts";
 import { Session } from "@supabase/supabase-js";
 import LoginButton from "./LoginButton.tsx";
-import { RiHomeFill, RiBarChartFill, RiHeartFill, RiLogoutBoxFill, RiMusic2Fill, RiCompassDiscoverFill, RiLoader4Line, RiTimeLine, RiUser3Fill, RiChat3Fill } from "react-icons/ri";
+import { RiHomeFill, RiBarChartFill, RiHeartFill, RiLogoutBoxFill, RiMusic2Fill, RiCompassDiscoverFill, RiLoader4Line, RiTimeLine, RiUser3Fill, RiChat3Fill, RiMenuLine, RiCloseLine } from "react-icons/ri";
 import { getSpotifyProfile, getTopTracks, getTopArtists, getLikedSongs, getRecentlyPlayed, getUserPlaylists, formatDuration, getTimeRangeLabel, SpotifyProfile, SpotifyTrack, SpotifyArtist } from "../spotify/api.ts";
 import FriendsPage from "./FriendsPage.tsx";
 import ChatPage from "./ChatPage.tsx";
@@ -16,9 +16,11 @@ interface SidebarProps {
   currentPage: Page;
   onPageChange: (page: Page) => void;
   pendingRequestsCount: number;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-function Sidebar({ session, currentPage, onPageChange, pendingRequestsCount }: SidebarProps) {
+function Sidebar({ session, currentPage, onPageChange, pendingRequestsCount, isOpen, onClose }: SidebarProps) {
   const [userProfile, setUserProfile] = useState<{ full_name: string | null; username: string | null; avatar_url: string | null } | null>(null);
 
   useEffect(() => {
@@ -76,74 +78,92 @@ function Sidebar({ session, currentPage, onPageChange, pendingRequestsCount }: S
   }, [session]);
 
   return (
-    <aside className="w-64 bg-black h-screen flex flex-col p-6 fixed left-0 top-0">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 text-white mb-8">
-          <RiMusic2Fill className="text-4xl text-spotify-green" />
-          <span className="text-2xl font-bold tracking-tight">MelodyShare</span>
-        </div>
-      </div>
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+          onClick={onClose}
+        />
+      )}
 
-      <nav className="flex flex-col gap-2">
-        <SidebarLink 
-          icon={<RiHomeFill />} 
-          text="Home" 
-          active={currentPage === "home"} 
-          onClick={() => onPageChange("home")}
-        />
-        <SidebarLink 
-          icon={<RiBarChartFill />} 
-          text="Stats" 
-          active={currentPage === "stats"} 
-          onClick={() => onPageChange("stats")}
-          disabled={!session}
-        />
-        <SidebarLink 
-          icon={<RiUser3Fill />} 
-          text="Friends" 
-          active={currentPage === "friends"} 
-          onClick={() => onPageChange("friends")}
-          disabled={!session}
-          badge={pendingRequestsCount > 0 ? pendingRequestsCount : undefined}
-        />
-        <SidebarLink 
-          icon={<RiChat3Fill />} 
-          text="Chat" 
-          active={currentPage === "chat"} 
-          onClick={() => onPageChange("chat")}
-          disabled={!session}
-        />
-      </nav>
-
-      <div className="mt-auto pt-6 border-t border-zinc-800">
-        {session && userProfile ? (
-          <div className="mb-4 p-3 bg-zinc-900/50 rounded-lg flex items-center gap-3 group relative cursor-help">
-            <Avatar url={userProfile.avatar_url} alt="Profile" size="md" />
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">{userProfile.full_name || "User"}</p>
-              <p className="text-zinc-500 text-xs truncate">@{userProfile.username || "username"}</p>
-            </div>
-            
-            {/* Tooltip */}
-            <div className="absolute bottom-full left-0 w-full mb-2 p-3 bg-zinc-800 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-zinc-700">
-              <p className="text-xs text-zinc-400 mb-1">Signed in as</p>
-              <p className="text-white text-sm font-bold truncate">{session.user.email}</p>
-              <p className="text-xs text-zinc-500 mt-2">ID: {session.user.id.slice(0, 8)}...</p>
-            </div>
+      <aside className={`
+        fixed left-0 top-0 h-screen bg-black flex flex-col p-6 z-50 transition-transform duration-300 ease-in-out border-r border-zinc-900 md:border-none
+        w-64
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        md:translate-x-0
+      `}>
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-white">
+            <RiMusic2Fill className="text-4xl text-spotify-green" />
+            <span className="text-2xl font-bold tracking-tight">MelodyShare</span>
           </div>
-        ) : null}
-        
-        {session && (
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors py-2 w-full"
-          >
-            <RiLogoutBoxFill className="text-xl" />
-            <span>Sign Out</span>
+          <button onClick={onClose} className="md:hidden text-zinc-400 hover:text-white">
+            <RiCloseLine size={24} />
           </button>
-        )}
-      </div>
-    </aside>
+        </div>
+
+        <nav className="flex flex-col gap-2">
+          <SidebarLink 
+            icon={<RiHomeFill />} 
+            text="Home" 
+            active={currentPage === "home"} 
+            onClick={() => { onPageChange("home"); onClose(); }}
+          />
+          <SidebarLink 
+            icon={<RiBarChartFill />} 
+            text="Stats" 
+            active={currentPage === "stats"} 
+            onClick={() => { onPageChange("stats"); onClose(); }}
+            disabled={!session}
+          />
+          <SidebarLink 
+            icon={<RiUser3Fill />} 
+            text="Friends" 
+            active={currentPage === "friends"} 
+            onClick={() => { onPageChange("friends"); onClose(); }}
+            disabled={!session}
+            badge={pendingRequestsCount > 0 ? pendingRequestsCount : undefined}
+          />
+          <SidebarLink 
+            icon={<RiChat3Fill />} 
+            text="Chat" 
+            active={currentPage === "chat"} 
+            onClick={() => { onPageChange("chat"); onClose(); }}
+            disabled={!session}
+          />
+        </nav>
+
+        <div className={`mt-auto pt-6 ${session ? 'border-t border-zinc-800' : ''}`}>
+          {session && userProfile ? (
+            <div className="mb-4 p-3 bg-zinc-900/50 rounded-lg flex items-center gap-3 group relative cursor-help">
+              <Avatar url={userProfile.avatar_url} alt="Profile" size="md" />
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-medium truncate">{userProfile.full_name || "User"}</p>
+                <p className="text-zinc-500 text-xs truncate">@{userProfile.username || "username"}</p>
+              </div>
+              
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-0 w-full mb-2 p-3 bg-zinc-800 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-zinc-700">
+                <p className="text-xs text-zinc-400 mb-1">Signed in as</p>
+                <p className="text-white text-sm font-bold truncate">{session.user.email}</p>
+                <p className="text-xs text-zinc-500 mt-2">ID: {session.user.id.slice(0, 8)}...</p>
+              </div>
+            </div>
+          ) : null}
+          
+          {session && (
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors py-2 w-full"
+            >
+              <RiLogoutBoxFill className="text-xl" />
+              <span>Sign Out</span>
+            </button>
+          )}
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -613,6 +633,7 @@ export default function MainPage({ session, spotifyToken }: MainPageProps) {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const accessToken = session?.provider_token || spotifyToken;
 
   const addToast = (title: string, message: string, type: ToastType = "info") => {
@@ -723,11 +744,27 @@ export default function MainPage({ session, spotifyToken }: MainPageProps) {
         currentPage={currentPage} 
         onPageChange={setCurrentPage} 
         pendingRequestsCount={pendingRequestsCount}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
       
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      <main className="ml-64 p-8 min-h-screen">
+      <main className="md:ml-64 p-4 md:p-8 min-h-screen transition-all duration-300">
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2 text-white">
+                <RiMusic2Fill className="text-3xl text-spotify-green" />
+                <span className="text-xl font-bold tracking-tight">MelodyShare</span>
+            </div>
+            <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="text-white p-2 hover:bg-zinc-900 rounded-lg transition-colors"
+            >
+                <RiMenuLine size={24} />
+            </button>
+        </div>
+
         <div className="max-w-5xl mx-auto">
           {!session ? (
             <>

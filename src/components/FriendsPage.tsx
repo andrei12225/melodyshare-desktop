@@ -256,26 +256,26 @@ export default function FriendsPage({ session }: { session: Session }) {
         confirmColor={alertState?.type === "error" ? "red" : "green"}
       />
 
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-16 h-16 bg-spotify-green rounded-full flex items-center justify-center">
-          <RiUser3Fill className="text-3xl text-black" />
+      <div className="flex items-center gap-4 mb-6 md:mb-8">
+        <div className="w-12 h-12 md:w-16 md:h-16 bg-spotify-green rounded-full flex items-center justify-center">
+          <RiUser3Fill className="text-2xl md:text-3xl text-black" />
         </div>
         <div>
-          <p className="text-zinc-400 text-sm">Your</p>
-          <h1 className="text-3xl font-bold text-white">Friends</h1>
+          <p className="text-zinc-400 text-xs md:text-sm">Your</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">Friends</h1>
         </div>
       </div>
 
       {/* Friend Requests Section */}
       {incomingRequests.length > 0 && (
-        <div className="bg-zinc-900/50 rounded-xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <div className="bg-zinc-900/50 rounded-xl p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
             <RiUserReceivedFill className="text-spotify-green" />
             Friend Requests
           </h2>
           <div className="space-y-3">
             {incomingRequests.map((request) => (
-              <div key={request.id} className="flex items-center justify-between bg-zinc-800/50 p-4 rounded-lg">
+              <div key={request.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-zinc-800/50 p-3 md:p-4 rounded-lg gap-3">
                 <div className="flex items-center gap-3">
                   <Avatar url={request.sender.avatar_url} alt={request.sender.username || "User"} size="md" />
                   <div>
@@ -283,17 +283,17 @@ export default function FriendsPage({ session }: { session: Session }) {
                     <p className="text-zinc-500 text-xs">@{request.sender.username}</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto justify-end">
                   <button 
                     onClick={() => acceptRequest(request.id)}
-                    className="p-2 bg-spotify-green text-black rounded-full hover:scale-105 transition-transform"
+                    className="flex-1 sm:flex-none p-2 bg-spotify-green text-black rounded-full hover:scale-105 transition-transform flex justify-center"
                     title="Accept"
                   >
                     <RiCheckFill />
                   </button>
                   <button 
                     onClick={() => rejectRequest(request.id)}
-                    className="p-2 bg-red-500/20 text-red-500 rounded-full hover:bg-red-500/30 transition-colors"
+                    className="flex-1 sm:flex-none p-2 bg-red-500/20 text-red-500 rounded-full hover:bg-red-500/30 transition-colors flex justify-center"
                     title="Reject"
                   >
                     <RiCloseFill />
@@ -305,10 +305,10 @@ export default function FriendsPage({ session }: { session: Session }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
         {/* Friends List */}
-        <div className="bg-zinc-900/50 rounded-xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <div className="bg-zinc-900/50 rounded-xl p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
             <RiUser3Fill className="text-spotify-green" />
             Your Friends ({friends.length})
           </h2>
@@ -341,8 +341,8 @@ export default function FriendsPage({ session }: { session: Session }) {
         </div>
 
         {/* Add Friend */}
-        <div className="bg-zinc-900/50 rounded-xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <div className="bg-zinc-900/50 rounded-xl p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
             <RiUserAddFill className="text-spotify-green" />
             Add Friend
           </h2>

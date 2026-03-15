@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Database } from "../lib/database.types";
-import { RiChat3Fill, RiSendPlaneFill, RiMusic2Fill, RiDeleteBinLine } from "react-icons/ri";
+import { RiChat3Fill, RiSendPlaneFill, RiMusic2Fill, RiDeleteBinLine, RiArrowLeftLine } from "react-icons/ri";
 import { FaSpotify } from "react-icons/fa";
 import Avatar from "./Avatar";
 import SongSearchModal from "./SongSearchModal";
@@ -235,7 +235,10 @@ export default function ChatPage({ session, accessToken }: { session: Session; a
       />
 
       {/* Sidebar: Friends List */}
-      <div className="w-1/3 bg-zinc-900/50 rounded-xl p-4 flex flex-col">
+      <div className={`
+        w-full md:w-1/3 bg-zinc-900/50 rounded-xl p-4 flex flex-col h-full
+        ${selectedFriend ? 'hidden md:flex' : 'flex'}
+      `}>
         <div className="flex items-center gap-2 mb-4">
           <RiChat3Fill className="text-spotify-green text-xl" />
           <h2 className="text-xl font-bold text-white">Chats</h2>
@@ -268,11 +271,20 @@ export default function ChatPage({ session, accessToken }: { session: Session; a
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 bg-zinc-900/50 rounded-xl flex flex-col overflow-hidden">
+      <div className={`
+        flex-1 bg-zinc-900/50 rounded-xl flex-col overflow-hidden h-full
+        ${selectedFriend ? 'flex' : 'hidden md:flex'}
+      `}>
         {selectedFriend ? (
           <>
             {/* Header */}
             <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
+              <button 
+                onClick={() => setSelectedFriend(null)}
+                className="md:hidden text-zinc-400 hover:text-white mr-2"
+              >
+                <RiArrowLeftLine size={24} />
+              </button>
               <Avatar url={selectedFriend.avatar_url} alt={selectedFriend.username || "User"} size="sm" />
               <h2 className="text-white font-bold">{selectedFriend.full_name || selectedFriend.username}</h2>
             </div>

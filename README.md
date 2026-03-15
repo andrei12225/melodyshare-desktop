@@ -1,8 +1,6 @@
 # MelodyShare
 
 <p align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/5/54/Spotify_Logo_RGB_Green.png" alt="Spotify" width="100" />
-  <br>
   <strong>MelodyShare</strong> — A desktop application for viewing your Spotify listening statistics and connecting with friends.
 </p>
 

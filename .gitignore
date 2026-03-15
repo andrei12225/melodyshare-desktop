@@ -25,5 +25,7 @@ dist-ssr
 
 # Environment files
 .env
-.env.local
 .env.*.local
+
+# Agent files
+AGENTS.md

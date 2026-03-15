@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Database } from "../lib/database.types";
-import { RiChat3Fill, RiSendPlaneFill, RiMusic2Fill } from "react-icons/ri";
+import { RiChat3Fill, RiSendPlaneFill, RiMusic2Fill, RiDeleteBinLine } from "react-icons/ri";
 import { FaSpotify } from "react-icons/fa";
 import Avatar from "./Avatar";
 import SongSearchModal from "./SongSearchModal";
+import ConfirmationModal from "./ConfirmationModal";
 import { SpotifyTrack } from "../spotify/api";
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -21,6 +22,7 @@ export default function ChatPage({ session, accessToken }: { session: Session; a
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [isSongModalOpen, setIsSongModalOpen] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFriends();
@@ -38,17 +40,28 @@ export default function ChatPage({ session, accessToken }: { session: Session; a
             event: 'INSERT',
             schema: 'public',
             table: 'messages',
-            filter: `sender_id=eq.${selectedFriend.id}`, // Listen for messages FROM the friend
+            filter: `sender_id=eq.${selectedFriend.id}`, // Listen for new messages FROM the friend
           },
           (payload) => {
-             // Only add if it's for me (implicit by subscription filter usually, but filter above is sender specific)
-             // We also need to check if receiver is me, but filter supports limited syntax.
-             // Easier to just listen to all inserts involving these two users if possible, or just listen to all 'messages' where receiver_id is me.
-             // Better: Listen to `receiver_id=eq.${session.user.id}` and filter in callback.
              const newMsg = payload.new as Message;
              if (newMsg.sender_id === selectedFriend.id) {
                setMessages((prev) => [...prev, newMsg]);
              }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'messages',
+            // No filter here because DELETE payload only contains ID (no sender_id),
+            // so filtering by sender_id would cause us to miss the event.
+          },
+          (payload) => {
+             const deletedMsgId = payload.old.id;
+             // Only removes if the ID exists in our current list
+             setMessages((prev) => prev.filter((msg) => msg.id !== deletedMsgId));
           }
         )
         .subscribe();
@@ -173,6 +186,35 @@ export default function ChatPage({ session, accessToken }: { session: Session; a
     }
   };
 
+  const confirmDeleteMessage = async () => {
+    if (!messageToDelete) return;
+    
+    const messageId = messageToDelete;
+    setMessageToDelete(null); // Close modal
+
+    // Optimistic update
+    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+
+    try {
+      const { error, count } = await supabase
+        .from('messages')
+        .delete({ count: 'exact' })
+        .eq('id', messageId);
+
+      if (error) throw error;
+      
+      // If count is 0, it means the row wasn't deleted (likely RLS policy)
+      if (count === 0) {
+          throw new Error("Message could not be deleted. Check RLS policies.");
+      }
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      alert("Failed to delete message. You may not have permission.");
+      // Revert optimistic update by refetching
+      if (selectedFriend) fetchMessages(selectedFriend.id);
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-100px)] flex gap-4">
       <SongSearchModal 
@@ -180,6 +222,16 @@ export default function ChatPage({ session, accessToken }: { session: Session; a
         onClose={() => setIsSongModalOpen(false)} 
         onSelect={handleSendSong}
         accessToken={accessToken}
+      />
+      
+      <ConfirmationModal
+        isOpen={!!messageToDelete}
+        onClose={() => setMessageToDelete(null)}
+        onConfirm={confirmDeleteMessage}
+        title="Delete Message"
+        message="Are you sure you want to delete this message? This action cannot be undone."
+        confirmText="Delete"
+        confirmColor="red"
       />
 
       {/* Sidebar: Friends List */}
@@ -239,9 +291,18 @@ export default function ChatPage({ session, accessToken }: { session: Session; a
                 }
 
                 return (
-                  <div key={msg.id} className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div key={msg.id} className={`group flex gap-2 ${isMe ? 'justify-end' : 'justify-start'} items-center`}>
+                    {isMe && (
+                      <button
+                        onClick={() => setMessageToDelete(msg.id)}
+                        className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-500 transition-opacity p-2 cursor-pointer"
+                        title="Delete message"
+                      >
+                        <RiDeleteBinLine size={16} />
+                      </button>
+                    )}
                     {!isMe && (
-                      <div className="flex-shrink-0 mt-auto">
+                      <div className="flex-shrink-0 self-end">
                          <Avatar url={selectedFriend.avatar_url} size="xs" />
                       </div>
                     )}

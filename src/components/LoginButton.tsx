@@ -3,18 +3,25 @@ import { FaSpotify } from "react-icons/fa";
 
 export default function LoginButton() {
   const handleLogin = async () => {
+    // Use custom protocol if running in Tauri, otherwise use current origin
+    const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI__;
+    const redirectTo = isTauri ? 'melodyshare://login' : window.location.origin;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'spotify',
       options: {
         scopes: 'user-read-email user-library-read playlist-read-private user-top-read user-read-recently-played',
-        redirectTo: window.location.origin,
+        redirectTo: redirectTo,
         queryParams: {
           prompt: 'consent'
         }
       },
     });
 
-    if (error) console.error("Login failed:", error.message);
+    if (error) {
+        console.error("Login failed:", error.message);
+        alert("Login failed: " + error.message);
+    }
   };
 
   return (

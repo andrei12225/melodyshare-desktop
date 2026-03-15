@@ -6,15 +6,6 @@
   <strong>MelodyShare</strong> — A desktop application for viewing your Spotify listening statistics and connecting with friends.
 </p>
 
-<p align="center">
-  <a href="https://github.com/andrei12225/melodyshare-desktop/releases">
-    <img src="https://img.shields.io/github/v/release/andrei12225/melodyshare-desktop" alt="Release" />
-  </a>
-  <a href="https://github.com/andrei12225/melodyshare-desktop/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/andrei12225/melodyshare-desktop" alt="License" />
-  </a>
-</p>
-
 ---
 
 ## About
@@ -117,10 +108,6 @@ melodyshare/
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
